@@ -1,0 +1,11 @@
+version: "3.8"
+services:
+  test-project:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: test-project:latest
+    container_name: test-project
+    ports:
+      - "3000:80"
+    restart: unless-stopped
