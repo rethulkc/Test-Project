@@ -1,0 +1,45 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - echo "Installing AWS CLI..."
+      - apt-get update -y
+      - apt-get install -y awscli
+      - echo "Installing Docker..."
+      - apt-get install -y docker.io
+
+  pre_build:
+      commands:
+        - echo "Logging into ECR..."
+        - aws ecr get-login-password --region $AWS_REGION | docker login --username AWS --password-stdin $REPOSITORY_URI
+        - if [ $? -ne 0 ]; then echo "ECR login failed"; exit 1; fi
+        
+        - echo "Authenticating with GitHub..."
+        - export GITHUB_TOKEN=$(aws secretsmanager get-secret-value --secret-id githubtoken --query "SecretString" --output text | jq -r .Token)
+        - if [ $? -ne 0 ]; then echo "Failed to retrieve GitHub token"; exit 1; fi
+        
+        - echo "GitHub OAuth Token retrieved: $GITHUB_TOKEN"  # Debugging line, remove in production
+        - git config --global url."https://$GITHUB_TOKEN@github.com".insteadOf "https://github.com"
+        - if [ $? -ne 0 ]; then echo "Git config failed"; exit 1; fi
+        
+        - git clone https://github.com/RethulC/Test-Project.git
+        - if [ $? -ne 0 ]; then echo "Git clone failed"; exit 1; fi
+        
+        - echo "Git configuration:"
+        - git config --global --get-regexp url
+
+  build:
+    commands:
+      - echo "Building Docker image..."
+      - docker build -t $REPOSITORY_URI:latest .
+      - docker tag $REPOSITORY_URI:latest $REPOSITORY_URI:latest
+
+  post_build:
+    commands:
+      - echo "Pushing Docker image to ECR..."
+      - docker push $REPOSITORY_URI:latest
+
+artifacts:
+  files:
+    - '**/*'
